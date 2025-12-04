@@ -16,13 +16,11 @@ function setOnline() {
         socket.emit("userOnline", user);
     }
 }
-
 senderInput.addEventListener("input", setOnline);
 
 // Display online users
 socket.on("onlineUsers", (users) => {
     const receiver = receiverInput.value.trim();
-
     const statusBox = document.getElementById("status");
     if (!statusBox) return;
 
@@ -90,13 +88,21 @@ function showTyping(text) {
 }
 
 // ---------------------------
-// ADD MESSAGE TO CHAT (with ticks)
+// CHECK IF MESSAGE IS VISIBLE ON SCREEN
+// ---------------------------
+function isInView(element) {
+    const rect = element.getBoundingClientRect();
+    return rect.top >= 0 && rect.bottom <= window.innerHeight;
+}
+
+// ---------------------------
+// ADD MESSAGE TO CHAT
 // ---------------------------
 function addMessage(msg) {
     const sender = senderInput.value.trim();
     const receiver = receiverInput.value.trim();
 
-    // Only show messages between the selected sender/receiver
+    // show only correct chat
     if (!(
         (msg.sender === sender && msg.receiver === receiver) ||
         (msg.sender === receiver && msg.receiver === sender)
@@ -104,33 +110,30 @@ function addMessage(msg) {
 
     const div = document.createElement("div");
     div.id = msg._id;
-    div.style.margin = "6px";
-    div.style.padding = "6px 10px";
-    div.style.borderRadius = "8px";
-    div.style.maxWidth = "70%";
+    div.className = msg.sender === sender ? "sent" : "received";
 
-    const isMine = msg.sender === sender;
-
-    div.style.background = isMine ? "#dcf8c6" : "#fff";
-    div.style.alignSelf = isMine ? "flex-end" : "flex-start";
-
-    // Read status ticks
     let ticks = "";
-    if (isMine) {
-        ticks = msg.read ? "✓✓" : "✓";
+    if (msg.sender === sender) {
+        if (msg.read) {
+            ticks = `<span style="color:blue">✓✓</span>`;
+        } else if (msg.delivered) {
+            ticks = "✓✓";
+        } else {
+            ticks = "✓";
+        }
     }
 
     div.innerHTML = `
         <b>${msg.sender}:</b> ${msg.text}
-        <span style="float:right; color:gray; font-size:12px">${ticks}</span>
+        <span style="float:right; font-size:12px; color:gray">${ticks}</span>
     `;
 
     chatBox.appendChild(div);
     chatBox.scrollTop = chatBox.scrollHeight;
 
-    // Mark message as read when receiver views it
+    // DELIVERED (receiver online)
     if (msg.receiver === sender) {
-        socket.emit("markRead", msg._id);
+        socket.emit("delivered", msg._id);
     }
 }
 
@@ -142,17 +145,17 @@ socket.on("newMessage", (msg) => {
 });
 
 // ---------------------------
-// READ RECEIPT UPDATED ✓✓
+// READ RECEIPT → MAKE TICK BLUE
 // ---------------------------
 socket.on("readReceipt", (msgId) => {
     const msgDiv = document.getElementById(msgId);
     if (msgDiv) {
-        msgDiv.innerHTML = msgDiv.innerHTML.replace("✓", "✓✓");
+        msgDiv.innerHTML = msgDiv.innerHTML.replace("✓✓", `<span style="color:blue">✓✓</span>`);
     }
 });
 
 // ---------------------------
-// AUTO-DELETED MESSAGE
+// AUTO-DELETE MESSAGE
 // ---------------------------
 socket.on("deleteMessage", (id) => {
     const msgElement = document.getElementById(id);
@@ -167,3 +170,27 @@ window.onload = function () {
         .then(res => res.json())
         .then(data => data.forEach(addMessage));
 };
+
+// ---------------------------
+// DETECT WHEN RECEIVER SEES MESSAGE → READ
+// ---------------------------
+function checkVisibleMessages() {
+    const sender = senderInput.value.trim();
+    const receiver = receiverInput.value.trim();
+
+    const receivedMsgs = document.querySelectorAll(".received");
+
+    receivedMsgs.forEach(msgDiv => {
+        if (isInView(msgDiv)) {
+            const msgId = msgDiv.id;
+
+            if (!msgDiv.dataset.readSent) {
+                msgDiv.dataset.readSent = "true";
+                socket.emit("read", msgId);
+            }
+        }
+    });
+}
+
+document.getElementById("messages").addEventListener("scroll", checkVisibleMessages);
+setInterval(checkVisibleMessages, 1000);
