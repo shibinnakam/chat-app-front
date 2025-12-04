@@ -75,6 +75,12 @@ button {
 <div id="chatBox">
     <header>Two Person Chat</header>
 
+    <!-- Sender / Receiver -->
+    <div style="padding:10px; display:flex; gap:10px;">
+        <input id="sender" placeholder="Your Name">
+        <input id="receiver" placeholder="Friend Name">
+    </div>
+
     <div id="messages"></div>
 
     <div id="inputArea">
@@ -84,7 +90,7 @@ button {
 </div>
 
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-<script src="script.js"></script>
+<script src="./script.js"></script>
 
 </body>
 </html>
