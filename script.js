@@ -6,10 +6,37 @@ const senderInput = document.getElementById("sender");
 const receiverInput = document.getElementById("receiver");
 const msgInput = document.getElementById("msg");
 const chatBox = document.getElementById("messages");
-;
 
 // ---------------------------
-// Send message
+// USER ONLINE STATUS
+// ---------------------------
+function setOnline() {
+    const user = senderInput.value.trim();
+    if (user) {
+        socket.emit("userOnline", user);
+    }
+}
+
+senderInput.addEventListener("input", setOnline);
+
+// Display online users
+socket.on("onlineUsers", (users) => {
+    const receiver = receiverInput.value.trim();
+
+    const statusBox = document.getElementById("status");
+    if (!statusBox) return;
+
+    if (receiver && users[receiver]) {
+        statusBox.innerHTML = `🟢 ${receiver} Online`;
+        statusBox.style.color = "green";
+    } else {
+        statusBox.innerHTML = `🔴 ${receiver} Offline`;
+        statusBox.style.color = "red";
+    }
+});
+
+// ---------------------------
+// SEND MESSAGE
 // ---------------------------
 function send() {
     const sender = senderInput.value.trim();
@@ -33,71 +60,99 @@ function send() {
 }
 
 // ---------------------------
-// Typing Indicator
+// TYPING INDICATOR
 // ---------------------------
 msgInput.addEventListener("input", () => {
     const sender = senderInput.value.trim();
-    if (!sender) return;
-    socket.emit("typing", { sender, receiver: receiverInput.value.trim() });
+    const receiver = receiverInput.value.trim();
+    if (!sender || !receiver) return;
+
+    socket.emit("typing", { sender, receiver });
 });
 
 socket.on("typing", (data) => {
-    if (data.sender !== senderInput.value.trim() &&
-        data.receiver === senderInput.value.trim()) {
-        showTyping(`${data.sender} is typing…`);
-    }
+    const currentUser = senderInput.value.trim();
+    if (data.receiver === currentUser) showTyping(`${data.sender} is typing…`);
 });
 
 function showTyping(text) {
-    let typingDiv = document.getElementById("typing");
-    if (!typingDiv) {
-        typingDiv = document.createElement("div");
-        typingDiv.id = "typing";
-        typingDiv.style.fontStyle = "italic";
-        typingDiv.style.color = "gray";
-        chatBox.appendChild(typingDiv);
+    let t = document.getElementById("typing");
+    if (!t) {
+        t = document.createElement("div");
+        t.id = "typing";
+        t.style.fontStyle = "italic";
+        t.style.color = "gray";
+        chatBox.appendChild(t);
     }
-    typingDiv.innerText = text;
+    t.innerText = text;
 
-    setTimeout(() => {
-        if (typingDiv) typingDiv.remove();
-    }, 1500);
+    setTimeout(() => t.remove(), 1500);
 }
 
 // ---------------------------
-// Display message
+// ADD MESSAGE TO CHAT (with ticks)
 // ---------------------------
 function addMessage(msg) {
-    const senderName = senderInput.value.trim();
-    const receiverName = receiverInput.value.trim();
+    const sender = senderInput.value.trim();
+    const receiver = receiverInput.value.trim();
 
+    // Only show messages between the selected sender/receiver
     if (!(
-        (msg.sender === senderName && msg.receiver === receiverName) ||
-        (msg.sender === receiverName && msg.receiver === senderName)
+        (msg.sender === sender && msg.receiver === receiver) ||
+        (msg.sender === receiver && msg.receiver === sender)
     )) return;
 
-    const p = document.createElement("p");
-    p.id = msg._id; // IMPORTANT: set DOM id so it can be removed
+    const div = document.createElement("div");
+    div.id = msg._id;
+    div.style.margin = "6px";
+    div.style.padding = "6px 10px";
+    div.style.borderRadius = "8px";
+    div.style.maxWidth = "70%";
 
-    p.innerHTML = `<b>${msg.sender}:</b> ${msg.text}`;
-    p.style.textAlign = msg.sender === senderName ? "right" : "left";
-    p.style.background = msg.sender === senderName ? "#dcf8c6" : "#fff";
-    p.style.padding = "6px 10px";
-    p.style.borderRadius = "8px";
-    p.style.margin = "5px";
-    p.style.display = "inline-block";
+    const isMine = msg.sender === sender;
 
-    chatBox.appendChild(p);
+    div.style.background = isMine ? "#dcf8c6" : "#fff";
+    div.style.alignSelf = isMine ? "flex-end" : "flex-start";
+
+    // Read status ticks
+    let ticks = "";
+    if (isMine) {
+        ticks = msg.read ? "✓✓" : "✓";
+    }
+
+    div.innerHTML = `
+        <b>${msg.sender}:</b> ${msg.text}
+        <span style="float:right; color:gray; font-size:12px">${ticks}</span>
+    `;
+
+    chatBox.appendChild(div);
     chatBox.scrollTop = chatBox.scrollHeight;
+
+    // Mark message as read when receiver views it
+    if (msg.receiver === sender) {
+        socket.emit("markRead", msg._id);
+    }
 }
 
 // ---------------------------
-// Listen for new real-time messages
+// REAL-TIME NEW MESSAGE
 // ---------------------------
-socket.on("newMessage", (msg) => addMessage(msg));
+socket.on("newMessage", (msg) => {
+    addMessage(msg);
+});
 
 // ---------------------------
-// Listen for deleted messages
+// READ RECEIPT UPDATED ✓✓
+// ---------------------------
+socket.on("readReceipt", (msgId) => {
+    const msgDiv = document.getElementById(msgId);
+    if (msgDiv) {
+        msgDiv.innerHTML = msgDiv.innerHTML.replace("✓", "✓✓");
+    }
+});
+
+// ---------------------------
+// AUTO-DELETED MESSAGE
 // ---------------------------
 socket.on("deleteMessage", (id) => {
     const msgElement = document.getElementById(id);
@@ -105,10 +160,10 @@ socket.on("deleteMessage", (id) => {
 });
 
 // ---------------------------
-// Load old messages
+// LOAD OLD MESSAGES
 // ---------------------------
 window.onload = function () {
     fetch(`${backend}/messages`)
         .then(res => res.json())
-        .then(data => data.forEach(m => addMessage(m)));
+        .then(data => data.forEach(addMessage));
 };
