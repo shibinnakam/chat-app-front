@@ -14,7 +14,7 @@ function send() {
 
     const data = { sender, receiver, text };
 
-    // Store in database + send through WebSocket
+    // Store in database + send WebSocket event
     fetch("https://chat-app-876w.onrender.com/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -24,15 +24,24 @@ function send() {
     document.getElementById("msg").value = "";
 }
 
-// When receiving real-time messages
+// Real-time new message comes here
 socket.on("newMessage", (msg) => {
     addMessage(msg);
 });
 
-// Show message in chat box
+// Display message + auto remove in 30 seconds
 function addMessage(msg) {
-    document.getElementById("chat").innerHTML += 
-        `<p><b>${msg.sender}:</b> ${msg.text}</p>`;
+    const chatBox = document.getElementById("chat");
+
+    const p = document.createElement("p");
+    p.innerHTML = `<b>${msg.sender}:</b> ${msg.text}`;
+
+    chatBox.appendChild(p);
+
+    // ❗ Remove the message after 30 seconds
+    setTimeout(() => {
+        p.remove();
+    }, 30000); // 30000ms = 30 seconds
 }
 
 // Load old messages on page load
