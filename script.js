@@ -1,17 +1,12 @@
-// ---------------------------
-// Connect to Render backend
-// ---------------------------
 const backend = "https://chat-app-876w.onrender.com";
 const socket = io(backend);
 
-// ---------------------------
-// Get sender & receiver from input fields
-// (You can also use URL params if needed)
-// ---------------------------
+// Inputs
 const senderInput = document.getElementById("sender");
 const receiverInput = document.getElementById("receiver");
 const msgInput = document.getElementById("msg");
-const chatBox = document.getElementById("chat");
+const chatBox = document.getElementById("messages");
+;
 
 // ---------------------------
 // Send message
@@ -28,7 +23,6 @@ function send() {
 
     const data = { sender, receiver, text };
 
-    // Send to backend + WebSocket
     fetch(`${backend}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -71,22 +65,21 @@ function showTyping(text) {
 }
 
 // ---------------------------
-// Display message + auto remove after 30s
+// Display message
 // ---------------------------
 function addMessage(msg) {
     const senderName = senderInput.value.trim();
     const receiverName = receiverInput.value.trim();
 
-    // Show messages only for this chat pair
     if (!(
         (msg.sender === senderName && msg.receiver === receiverName) ||
         (msg.sender === receiverName && msg.receiver === senderName)
     )) return;
 
     const p = document.createElement("p");
-    p.innerHTML = `<b>${msg.sender}:</b> ${msg.text}`;
+    p.id = msg._id; // IMPORTANT: set DOM id so it can be removed
 
-    // WhatsApp style: sent on right, received on left
+    p.innerHTML = `<b>${msg.sender}:</b> ${msg.text}`;
     p.style.textAlign = msg.sender === senderName ? "right" : "left";
     p.style.background = msg.sender === senderName ? "#dcf8c6" : "#fff";
     p.style.padding = "6px 10px";
@@ -96,9 +89,6 @@ function addMessage(msg) {
 
     chatBox.appendChild(p);
     chatBox.scrollTop = chatBox.scrollHeight;
-
-    // Remove from UI after 30 seconds
-    setTimeout(() => p.remove(), 30000);
 }
 
 // ---------------------------
@@ -107,12 +97,18 @@ function addMessage(msg) {
 socket.on("newMessage", (msg) => addMessage(msg));
 
 // ---------------------------
-// Load old messages on page load
+// Listen for deleted messages
+// ---------------------------
+socket.on("deleteMessage", (id) => {
+    const msgElement = document.getElementById(id);
+    if (msgElement) msgElement.remove();
+});
+
+// ---------------------------
+// Load old messages
 // ---------------------------
 window.onload = function () {
     fetch(`${backend}/messages`)
         .then(res => res.json())
-        .then(data => {
-            data.forEach(m => addMessage(m));
-        });
+        .then(data => data.forEach(m => addMessage(m)));
 };
