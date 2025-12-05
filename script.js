@@ -6,16 +6,30 @@ const senderInput = document.getElementById("sender");
 const receiverInput = document.getElementById("receiver");
 const msgInput = document.getElementById("msg");
 const chatBox = document.getElementById("messages");
-const msgSound = document.getElementById("msgSound");
+
+// Create audio element dynamically
+const msgSound = new Audio("./message.mp3");
+msgSound.preload = "auto";
+let audioUnlocked = false;
+
+// ---------------------------
+// UNLOCK AUDIO ON FIRST INTERACTION (for desktop/laptop)
+document.body.addEventListener("click", () => {
+    if (!audioUnlocked) {
+        msgSound.play().catch(() => {
+            msgSound.pause();
+            msgSound.currentTime = 0;
+        });
+        audioUnlocked = true;
+    }
+}, { once: true });
 
 // ---------------------------
 // USER ONLINE STATUS
 // ---------------------------
 function setOnline() {
     const user = senderInput.value.trim();
-    if (user) {
-        socket.emit("userOnline", user);
-    }
+    if (user) socket.emit("userOnline", user);
 }
 senderInput.addEventListener("input", setOnline);
 
@@ -103,7 +117,6 @@ function addMessage(msg) {
     const sender = senderInput.value.trim();
     const receiver = receiverInput.value.trim();
 
-    // Show only correct chat
     if (!(
         (msg.sender === sender && msg.receiver === receiver) ||
         (msg.sender === receiver && msg.receiver === sender)
@@ -116,13 +129,9 @@ function addMessage(msg) {
     // Ticks for delivery/read
     let ticks = "";
     if (msg.sender === sender) {
-        if (msg.read) {
-            ticks = `<span style="color:blue">✓✓</span>`;
-        } else if (msg.delivered) {
-            ticks = "✓✓";
-        } else {
-            ticks = "✓";
-        }
+        if (msg.read) ticks = `<span style="color:blue">✓✓</span>`;
+        else if (msg.delivered) ticks = "✓✓";
+        else ticks = "✓";
     }
 
     div.innerHTML = `
@@ -133,23 +142,19 @@ function addMessage(msg) {
     chatBox.appendChild(div);
     chatBox.scrollTop = chatBox.scrollHeight;
 
-    // Play sound for incoming message
-    if (msg.sender !== sender) {
-        msgSound.play();
+    // Play sound for incoming messages (other sender)
+    if (msg.sender !== sender && audioUnlocked) {
+        msgSound.play().catch(() => {});
     }
 
     // DELIVERED (receiver online)
-    if (msg.receiver === sender) {
-        socket.emit("delivered", msg._id);
-    }
+    if (msg.receiver === sender) socket.emit("delivered", msg._id);
 }
 
 // ---------------------------
 // REAL-TIME NEW MESSAGE
 // ---------------------------
-socket.on("newMessage", (msg) => {
-    addMessage(msg);
-});
+socket.on("newMessage", (msg) => addMessage(msg));
 
 // ---------------------------
 // READ RECEIPT → MAKE TICK BLUE
@@ -186,11 +191,9 @@ function checkVisibleMessages() {
     const receiver = receiverInput.value.trim();
 
     const receivedMsgs = document.querySelectorAll(".received");
-
     receivedMsgs.forEach(msgDiv => {
         if (isInView(msgDiv)) {
             const msgId = msgDiv.id;
-
             if (!msgDiv.dataset.readSent) {
                 msgDiv.dataset.readSent = "true";
                 socket.emit("read", msgId);
