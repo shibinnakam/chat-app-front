@@ -6,6 +6,7 @@ const senderInput = document.getElementById("sender");
 const receiverInput = document.getElementById("receiver");
 const msgInput = document.getElementById("msg");
 const chatBox = document.getElementById("messages");
+const msgSound = document.getElementById("msgSound");
 
 // ---------------------------
 // USER ONLINE STATUS
@@ -102,7 +103,7 @@ function addMessage(msg) {
     const sender = senderInput.value.trim();
     const receiver = receiverInput.value.trim();
 
-    // show only correct chat
+    // Show only correct chat
     if (!(
         (msg.sender === sender && msg.receiver === receiver) ||
         (msg.sender === receiver && msg.receiver === sender)
@@ -112,6 +113,7 @@ function addMessage(msg) {
     div.id = msg._id;
     div.className = msg.sender === sender ? "sent" : "received";
 
+    // Ticks for delivery/read
     let ticks = "";
     if (msg.sender === sender) {
         if (msg.read) {
@@ -130,6 +132,11 @@ function addMessage(msg) {
 
     chatBox.appendChild(div);
     chatBox.scrollTop = chatBox.scrollHeight;
+
+    // Play sound for incoming message
+    if (msg.sender !== sender) {
+        msgSound.play();
+    }
 
     // DELIVERED (receiver online)
     if (msg.receiver === sender) {
